@@ -1,9 +1,12 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import sequelize from "./src/config/db.config.js";
+import { syncDatabase } from "./src/config/sequelize.js";
 
 const app = express();
+
+// connect and sync database
+await syncDatabase();
 
 // Middlewares
 app.use(express.json());
