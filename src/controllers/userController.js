@@ -1,5 +1,5 @@
-import { validator } from "validator";
-import User from "../models/userModel";
+import validator from "validator";
+import User from "../models/userModel.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 
@@ -24,6 +24,12 @@ const registerUser = async (req, res) => {
 
     if (!validator.isStrongPassword(password))
       return res.status(400).json({ message: "Password not strong enough" });
+
+    const exist = await User.findOne({ where: { email } });
+    if (exist)
+      return res
+        .status(400)
+        .json({ message: "User already exist with this email" });
 
     // hash user's password
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -76,13 +82,40 @@ const loginUser = async (req, res) => {
 // -------- Update user
 const updateUser = async (req, res) => {
   try {
-    const { email, update } = req.body;
+    const { email, password, username, update } = req.body;
 
     const user = await User.findOne({ where: { email } });
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    if (update.email) user.email = update.email;
-    if (update.password) user.password = await bcrypt.hash(update.password, 10);
+    const veryfyPassword = await bcrypt.compare(password, user.password);
+
+    if (!veryfyPassword)
+      return res.status(401).json({ message: "Password incorrect." });
+
+    if (update.email && update.email !== email) {
+      exist = await User.findOne({ where: { email: update.email } });
+      if (exist)
+        return res
+          .status(400)
+          .json({ message: "User already exists with the new email" });
+
+      if (!validator.isEmail(email))
+        return res.status(400).json({ message: "Invalid email" });
+
+      user.email = update.email;
+    }
+
+    if (update.username && update.username !== username) {
+      user.username = username;
+    }
+
+    if (update.password && update.password !== password) {
+      if (!validator.isStrongPassword(update.password))
+        return res
+          .status(400)
+          .json({ message: "New password not strong enough" });
+      user.password = await bcrypt.hash(update.password, 10);
+    }
 
     await user.save();
 
@@ -96,9 +129,14 @@ const updateUser = async (req, res) => {
 // --------- Delete user
 const deleteUser = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, password } = req.body;
     const user = await User.findOne({ where: { email } });
     if (!user) return res.status(404).json({ message: "User not found." });
+
+    const veryfyPassword = await bcrypt.compare(password, user.password);
+
+    if (!veryfyPassword)
+      return res.status(401).json({ message: "Password incorrect." });
     await user.destroy();
 
     res.status(200).json({ message: "User deleted successfully." });
